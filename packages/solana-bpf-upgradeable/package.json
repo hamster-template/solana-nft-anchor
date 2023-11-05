@@ -1,0 +1,12 @@
+{
+  "name": "solana-bpf-upgradeable",
+  "version": "0.0.1",
+  "description": "solana bpf upgradeable",
+  "main": "index.js",
+  "author": "shooter",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@solana/buffer-layout": "^4.0.1",
+    "@solana/web3.js": "^1.87.3"
+  }
+}
