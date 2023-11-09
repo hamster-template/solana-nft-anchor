@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 
-import { Keypair, Connection, clusterApiUrl} from "@solana/web3.js";
+import { PublicKey, Keypair, Connection, clusterApiUrl} from "@solana/web3.js";
 import { Tx, Common, BpfLoaderUpgradeable } from "../packages/solana-bpf-upgradeable";
 
 /** Maximum amount of transaction retries */
@@ -9,10 +9,11 @@ const MAX_RETRIES = 5;
 /** Sleep amount multiplier each time a transaction fails */
 const SLEEP_MULTIPLIER = 1.8;
 
-const pathToProgram = './file.so'
+const pathToProgram = 'file.so'
 
 const processDeploy = async () => {
 
+  console.time()
   let programBuffer;
 
   await fs.promises.readFile(pathToProgram)
@@ -24,6 +25,13 @@ const processDeploy = async () => {
       console.error(`Error reading the file: ${err}`);
     });
 
+  // payer Account
+  const secret = []
+  const uint8Array = new Uint8Array(secret)
+  const walletKp = Keypair.fromSecretKey(uint8Array)
+  const payerAddr = walletKp.publicKey.toString()
+  console.log("payerAddr: ", payerAddr)
+
   const conn = new Connection(clusterApiUrl('devnet'));
 
   // buffer Account
@@ -33,24 +41,13 @@ const processDeploy = async () => {
   const bufferAddr = bufferKp.publicKey.toString()
   console.log("bufferAddr: ", bufferAddr)
 
-  // Create buffer
-  // const bufferKp = Keypair.generate();
-  // console.log("Buffer pk: " + bufferKp.publicKey.toBase58())
+  // const bufferPk = new PublicKey('')
 
   const programLen = programBuffer.length;
-  const bufferSize = BpfLoaderUpgradeable.getBufferAccountSize(programLen); //
+  const bufferSize = BpfLoaderUpgradeable.getBufferAccountSize(programLen);
   const bufferBalance = await conn.getMinimumBalanceForRentExemption(
     bufferSize
   );
-
-  ///// payer Account
-  const secret = []
-  const uint8Array = new Uint8Array(secret);
-  const walletKp = Keypair.fromSecretKey(uint8Array)
-  const payerAccountAddr = walletKp.publicKey.toString()
-  console.log("payerAccountAddr: ", payerAccountAddr)
-
-  const userBalance = await conn.getBalance(walletKp.publicKey);
 
   let sleepAmount = 1000;
   // Retry until it's successful or exceeds max tries
@@ -61,16 +58,17 @@ const processDeploy = async () => {
         if (bufferInit) break;
       }
 
-      const createBufferResult = await BpfLoaderUpgradeable.createBuffer(
-        conn,
-        walletKp,
-        bufferKp,
+      const createBufferTx = BpfLoaderUpgradeable.createBuffer(
+        walletKp.publicKey,
+        bufferKp.publicKey,
         bufferBalance,
         programLen,
       );
+
+      const createBufferResult = await Tx.send(createBufferTx, conn, walletKp, [bufferKp]);
+
       console.log(/createBufferResult/);
       console.log(createBufferResult);
-      console.log(/createBufferResult/);
 
     } catch (e: any) {
       console.log("Create buffer error: ", e.message);
@@ -84,11 +82,17 @@ const processDeploy = async () => {
     }
   }
 
-  const bufferAccount = await conn.getAccountInfo(bufferKp.publicKey)
+  let bufferAccount = await conn.getAccountInfo(bufferKp.publicKey)
   console.log(/bufferAccount/)
   console.log(bufferAccount)
-  console.log(/bufferAccount/)
-  await Common.sleep(1000 * 5);
+  Common.sleep(1000 * 10)
+
+  bufferAccount = await conn.getAccountInfo(bufferKp.publicKey)
+
+  if (bufferAccount == null) {
+    console.log(`bufferAccount is null`)
+    return
+  }
 
   // Load buffer
   console.log(/loadBuffer/);
@@ -106,23 +110,18 @@ const processDeploy = async () => {
   sleepAmount = 1000;
 
   const programSecret = []
-  const programUint8Array = new Uint8Array(programSecret);
-
-  const programKp = Keypair.fromSecretKey(programUint8Array);
-  const programPk = programKp.publicKey;
+  const programUint8Array = new Uint8Array(programSecret)
+  const programKp = Keypair.fromSecretKey(programUint8Array)
+  const programPk = programKp.publicKey
   const programAddr = programPk.toString()
   console.log("programAddr: ", programAddr)
+
+  // const programId = new PublicKey("")
 
   // Retry until it's successful or exceeds max tries
   for (let i = 0; i < MAX_RETRIES; i++) {
     try {
       // First deploy needs keypair
-      if (!programKp) {
-        let errMsg =
-          "Initial deployment needs a keypair but you've only provided a public key.";
-        break;
-      }
-
       const programSize = BpfLoaderUpgradeable.getBufferAccountSize(
         BpfLoaderUpgradeable.BUFFER_PROGRAM_SIZE
       );
@@ -132,14 +131,15 @@ const processDeploy = async () => {
         await conn.getMinimumBalanceForRentExemption(programSize);
 
       console.log(/deployProgram/);
-      txHash = await BpfLoaderUpgradeable.deployProgram(
-        conn,
-        walletKp,
+      const deployProgramTx = await BpfLoaderUpgradeable.deployProgram(
+        walletKp.publicKey,
         bufferKp.publicKey,
-        programKp,
+        programKp.publicKey,
         programBalance,
         programLen * 2,
       );
+
+      txHash = await Tx.send(deployProgramTx, conn, walletKp, [programKp]);
 
       console.log("Deploy Program Tx Hash:", txHash);
 
@@ -172,7 +172,10 @@ const processDeploy = async () => {
     throw new Error();
   }
 
+  console.timeEnd()
+
   return { txHash };
+
 };
 
 async function main(){
