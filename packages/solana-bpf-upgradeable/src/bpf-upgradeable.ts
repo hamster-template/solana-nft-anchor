@@ -547,18 +547,17 @@ export class BpfLoaderUpgradeable {
   }
 
   /** Create and initialize a buffer account. */
-  static async createBuffer(
-    conn: Connection,
-    walletKp: Keypair,
-    buffer: Signer,
+  static createBuffer(
+    walletPk: PublicKey,
+    bufferPk: PublicKey,
     lamports: number,
     programLen: number,
-  ) {
+  ):Transaction {
     const tx = new Transaction();
     tx.add(
       SystemProgram.createAccount({
-        fromPubkey: walletKp.publicKey,
-        newAccountPubkey: buffer.publicKey,
+        fromPubkey: walletPk,
+        newAccountPubkey: bufferPk,
         lamports,
         space: this.getBufferAccountSize(programLen),
         programId: BPF_LOADER_UPGRADEABLE_PROGRAM_ID,
@@ -566,12 +565,12 @@ export class BpfLoaderUpgradeable {
     );
     tx.add(
       BpfLoaderUpgradeableProgram.initializeBuffer({
-        bufferPk: buffer.publicKey,
-        authorityPk: walletKp.publicKey,
+        bufferPk: bufferPk,
+        authorityPk: walletPk,
       })
     );
 
-    return await Tx.send(tx, conn, walletKp, [buffer]);
+    return tx
   }
 
   /** Update the buffer authority. */
@@ -695,18 +694,17 @@ export class BpfLoaderUpgradeable {
 
   /** Create a program account from initialized buffer. */
   static async deployProgram(
-    conn: Connection,
-    walletKp: Keypair,
+    walletPk: PublicKey,
     bufferPk: PublicKey,
-    program: Signer,
+    programPk: PublicKey,
     programLamports: number,
     maxDataLen: number,
-  ) {
+  ) : Promise<Transaction>{
     const tx = new Transaction();
     tx.add(
       SystemProgram.createAccount({
-        fromPubkey: walletKp.publicKey,
-        newAccountPubkey: program.publicKey,
+        fromPubkey: walletPk,
+        newAccountPubkey: programPk,
         lamports: programLamports,
         space: this.BUFFER_PROGRAM_SIZE,
         programId: BPF_LOADER_UPGRADEABLE_PROGRAM_ID,
@@ -714,15 +712,15 @@ export class BpfLoaderUpgradeable {
     );
     tx.add(
       await BpfLoaderUpgradeableProgram.deployWithMaxProgramLen({
-        programPk: program.publicKey,
+        programPk: programPk,
         bufferPk,
-        upgradeAuthorityPk: walletKp.publicKey,
-        payerPk: walletKp.publicKey,
+        upgradeAuthorityPk: walletPk,
+        payerPk: walletPk,
         maxDataLen,
       })
     );
 
-    return await Tx.send(tx, conn, walletKp, [program]);
+    return tx;
   }
 
   // Update program authority
