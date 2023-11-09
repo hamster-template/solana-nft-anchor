@@ -9,6 +9,7 @@
         "@metaplex-foundation/umi": "^0.8.9",
         "@metaplex-foundation/umi-bundle-defaults": "^0.8.9",
         "@metaplex-foundation/umi-signer-wallet-adapters": "^0.8.9",
+        "@solana/buffer-layout": "^4.0.1",
         "@solana/spl-token": "^0.3.8"
     },
     "devDependencies": {
